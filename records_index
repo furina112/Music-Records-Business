@@ -1,0 +1,220 @@
+<?php
+require 'authentication.php';      // login guard (also gives us $uid)
+require 'music_dbconfig.php';
+
+// ADD a record
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $pdo->prepare("INSERT INTO records (artist_id, title, price, release_year, added_by, updated_by) VALUES (?,?,?,?,?,?)")
+        ->execute([$_POST['artist_id'], $_POST['title'], $_POST['price'], $_POST['release_year'], $uid, $uid]);
+    header("Location: records_index.php?artist_id=" . $_POST['artist_id']);
+    exit;
+}
+
+$artists = $pdo->query("SELECT * FROM artists")->fetchAll(PDO::FETCH_ASSOC);
+$filter  = $_GET['artist_id'] ?? null;
+
+$sql = "SELECT r.*, a.artist_name,
+               CONCAT(u1.first_name,' ',u1.last_name) AS added_by_name,
+               CONCAT(u2.first_name,' ',u2.last_name) AS updated_by_name
+        FROM records r
+        JOIN artists a ON r.artist_id = a.artist_id
+        LEFT JOIN users u1 ON r.added_by   = u1.user_id
+        LEFT JOIN users u2 ON r.updated_by = u2.user_id";
+$stmt = $filter ? $pdo->prepare($sql . " WHERE r.artist_id=?") : $pdo->prepare($sql);
+$stmt->execute($filter ? [$filter] : []);
+$records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+<?php include 'scrapbook2.php'; ?>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Caveat', cursive;
+    font-size: 22px;
+    color: #1b1b1b;
+  }
+
+  .wrap {
+    position: relative;
+    max-width: 1100px;
+    margin: 60px auto 50px;
+    transform: rotate(-1deg);
+    filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.75));
+  }
+
+  .paper {
+    position: relative;
+    padding: 56px 46px 40px;
+    background:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .28 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+      radial-gradient(circle at 20% 15%, rgba(255, 255, 255, .35), transparent 55%),
+      radial-gradient(circle at 85% 90%, rgba(0, 0, 0, .18), transparent 50%),
+      #d6d3cb;
+    clip-path: polygon(0.5% 1.5%, 4% 0%, 8% 1.5%, 13% 0%, 18% 1.5%, 24% 0%, 30% 1.5%, 36% 0%, 42% 1.5%, 48% 0%, 54% 1.5%, 60% 0%, 66% 1.5%, 72% 0%, 78% 1.5%, 84% 0%, 90% 1.5%, 95% 0%, 100% 1.5%,
+                       99.4% 12%, 100% 25%, 99.2% 38%, 100% 52%, 99.3% 66%, 100% 80%, 99.4% 92%, 100% 98.5%,
+                       95% 100%, 90% 98.5%, 84% 100%, 78% 98.5%, 72% 100%, 66% 98.5%, 60% 100%, 54% 98.5%, 48% 100%, 42% 98.5%, 36% 100%, 30% 98.5%, 24% 100%, 18% 98.5%, 13% 100%, 8% 98.5%, 4% 100%, 0% 98.5%,
+                       0.6% 90%, 0% 76%, 0.7% 62%, 0% 48%, 0.6% 34%, 0% 20%, 0.5% 8%);
+  }
+
+  /* strip of tape holding the paper to the wall */
+  .tape {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    margin-left: -75px;
+    width: 150px;
+    height: 36px;
+    z-index: 2;
+    background: rgba(222, 200, 160, 0.85);
+    transform: rotate(-3deg);
+    clip-path: polygon(0 10%, 3% 0, 6% 12%, 9% 0, 100% 0, 97% 15%, 100% 30%, 97% 45%, 100% 60%, 97% 75%, 100% 90%, 100% 100%, 0 100%, 3% 85%, 0 70%, 3% 55%, 0 40%, 3% 25%);
+  }
+
+  .topbar { display: flex; justify-content: space-between; margin: 0 0 4px; font-style: italic; font-size: 21px; }
+
+  h1 {
+    margin: 0 0 6px;
+    font-family: 'Permanent Marker', cursive;
+    font-weight: 400;
+    font-size: 48px;
+    line-height: 1.1;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transform: rotate(-1.5deg);
+    transform-origin: left center;
+  }
+
+  .heading { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 26px; }
+  .sub, .quote {
+    display: inline-block;
+    padding-bottom: 2px;
+    font-size: 24px;
+    font-style: italic;
+    border-bottom: 3px solid #1b1b1b;
+    transform: rotate(-1.5deg);
+  }
+  .back { font-size: 22px; }
+
+  /* add-record form */
+  form { display: flex; flex-wrap: nowrap; gap: 12px; margin-bottom: 30px; align-items: center; }
+  input, select {
+    flex: 1 1 0; min-width: 0;
+    padding: 12px 14px;
+    font-family: 'Caveat', cursive;
+    font-size: 23px;
+    font-style: italic;
+    color: #1b1b1b;
+    background: rgba(255, 255, 255, .3);
+    border: 2px solid #2a2a2a;
+    border-radius: 3px;
+    outline: none;
+  }
+  input::placeholder { color: #6d6a63; }
+  input:focus, select:focus { background: rgba(255, 255, 255, .6); border-color: #000; }
+
+  button {
+    padding: 13px 28px 11px;
+    font-family: 'Permanent Marker', cursive;
+    font-size: 21px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #eee;
+    background: #111;
+    border: none;
+    cursor: pointer;
+    clip-path: polygon(2% 20%, 8% 4%, 20% 14%, 35% 2%, 50% 12%, 66% 0, 82% 10%, 96% 2%, 100% 28%, 97% 52%, 100% 78%, 95% 96%, 80% 88%, 62% 100%, 45% 90%, 28% 100%, 12% 90%, 3% 98%, 0 70%, 3% 45%);
+    transition: transform .15s;
+  }
+  button:hover { transform: rotate(-1deg) scale(1.04); background: #000; }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    white-space: nowrap;
+    padding: 8px 10px 12px;
+    text-align: left;
+    font-family: 'Permanent Marker', cursive;
+    font-weight: 400;
+    font-size: 15px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 4px solid #1b1b1b;
+  }
+  td { padding: 12px 10px 8px; font-size: 21px; white-space: nowrap; font-style: italic; border-bottom: 2px dashed #555; }
+  tr:hover td { background: rgba(0, 0, 0, .07); }
+  td a, .back a { color: #1b1b1b; text-decoration: underline; font-weight: 700; }
+  td a.del { color: #8b1a1a; }
+  .empty { text-align: center; padding: 26px; }
+
+  @media (max-width: 800px) {
+    form { flex-wrap: wrap; }
+    .paper { padding: 50px 16px 30px; }
+    .heading { flex-direction: column; align-items: flex-start; gap: 14px; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+
+<div class="wrap">
+  <span class="tape"></span>
+  <div class="paper">
+    <!-- position/z-index keeps the link above the scrapbook background so it can be clicked -->
+<p class="topbar" style="position:relative; z-index:5;">
+  <span>Logged in as <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+  <!-- confirm() asks first; Cancel stops the logout, OK goes to logout.php -->
+  <a href="logout.php" onclick="return confirm('Are you sure you want to log out?')"
+     style="color:#1b1b1b;font-weight:700;">Logout</a>
+</p><p class="topbar">
+      <span>Logged in as <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+      <a href="logout.php" style="color:#1b1b1b;font-weight:700;"></a>
+    </p>
+
+    <h1>The Record Crate</h1>
+    <div class="heading">
+ 
+      <span class="sub">♫"I don't believe anyone
+as they crawl out of my way"♫</span>
+      <span class="back"><a href="music_artist_index.php">&larr; Back to the Artist Wall</a></span>
+    </div>
+
+    <form method="post">
+      <select name="artist_id" required>
+        <option value="">Artist</option>
+        <?php foreach ($artists as $a): ?>
+          <option value="<?= $a['artist_id'] ?>" <?= $filter == $a['artist_id'] ? 'selected' : '' ?>>
+            <?= htmlspecialchars($a['artist_name']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <input name="title" placeholder="Record title" required style="flex-grow:2;">
+      <input name="price" type="number" step="0.01" placeholder="Price" required>
+      <input name="release_year" type="number" placeholder="Year" required>
+      <button>Add Record</button>
+    </form>
+
+    <table>
+      <tr>
+        <th>ID</th><th>Artist</th><th>Title</th><th>Price</th><th>Year</th>
+        <th>Added by</th><th>Last updated by</th><th>Last updated</th><th>Actions</th>
+      </tr>
+      <?php foreach ($records as $r): ?>
+      <tr>
+        <td><?= $r['record_id'] ?></td>
+        <td><?= htmlspecialchars($r['artist_name']) ?></td>
+        <td><?= htmlspecialchars($r['title']) ?></td>
+        <td><?= $r['price'] ?></td>
+        <td><?= $r['release_year'] ?></td>
+        <td><?= htmlspecialchars($r['added_by_name'] ?? '—') ?></td>
+        <td><?= htmlspecialchars($r['updated_by_name'] ?? '—') ?></td>
+        <td><?= $r['last_updated'] ?? '—' ?></td>
+        <td>
+          <a href="records_edit.php?id=<?= $r['record_id'] ?>">Edit</a> /
+          <a class="del" href="records_delete.php?id=<?= $r['record_id'] ?>&artist_id=<?= $r['artist_id'] ?>" onclick="return confirm('Delete this record?')">Delete</a>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+      <?php if (!$records): ?><tr><td colspan="9" class="empty">Nothing in the crate yet. Add the first record!</td></tr><?php endif; ?>
+    </table>
+  </div>
+</div>
