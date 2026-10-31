@@ -1,0 +1,1 @@
+<?php header("Location: music_artist_index.php");
