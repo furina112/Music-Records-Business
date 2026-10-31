@@ -1,0 +1,265 @@
+<?php
+require 'authentication.php';
+require 'music_dbconfig.php';
+
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
+        http_response_code(403);
+        exit('Invalid request.');
+    }
+
+    $name  = trim($_POST['artist_name'] ?? '');
+    $genre = trim($_POST['genre'] ?? '');
+
+    if ($name !== '') {
+        $pdo->prepare(
+            "INSERT INTO artists (artist_name, genre, added_by, updated_by) VALUES (?,?,?,?)"
+        )->execute([$name, $genre ?: null, $uid, $uid]);
+    }
+
+    header("Location: music_artist_index.php");
+    exit;
+}
+
+$artists = $pdo->query("
+  SELECT a.*,
+         CONCAT(u1.first_name,' ',u1.last_name) AS added_by_name,
+         CONCAT(u2.first_name,' ',u2.last_name) AS updated_by_name
+  FROM artists a
+  LEFT JOIN users u1 ON a.added_by   = u1.user_id
+  LEFT JOIN users u2 ON a.updated_by = u2.user_id
+  ORDER BY a.artist_name
+")->fetchAll(PDO::FETCH_ASSOC);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Artists</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Permanent+Marker&display=swap" rel="stylesheet">
+
+  <style>
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: 100px 16px 60px;
+  overflow-x: hidden;
+  background: #0a0a0a;
+  font-family: 'Caveat', cursive;
+  font-size: 1.25rem;
+  color: #1c1c1c;
+}
+
+.sheet {
+  position: relative;
+  z-index: 1;
+  max-width: 1050px;
+  margin: 0 auto;
+  transform: rotate(-.6deg);
+}
+    .tape {
+      position: absolute;
+      top: -16px; left: 50%;
+      width: 150px; height: 38px;
+      transform: translateX(-50%) rotate(-3deg);
+      background: rgba(222, 200, 150, .85);
+      box-shadow: 0 1px 4px rgba(0,0,0,.4);
+      z-index: 2;
+    }
+
+    .paper {
+      
+      padding: 48px 36px 44px;
+      background: linear-gradient(135deg, #d9d5cb, #c9c4b9);
+      clip-path: polygon(
+        0% 2%, 4% 0%, 9% 1.5%, 15% 0%, 22% 1.2%, 30% 0%, 38% 1.5%, 47% 0%, 55% 1.2%,
+        64% 0%, 72% 1.5%, 81% 0%, 90% 1.3%, 96% 0%, 100% 1.5%,
+        100% 98%, 95% 100%, 88% 98.6%, 80% 100%, 70% 98.8%, 60% 100%, 50% 98.7%,
+        40% 100%, 30% 98.8%, 20% 100%, 10% 98.7%, 4% 100%, 0% 98.5%);
+    }
+
+    .topbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+    h1 {
+      margin: 10px 0 0;
+      font-family: 'Permanent Marker', cursive;
+      font-size: 2.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .tagline {
+      margin: 4px 0 22px;
+      padding-bottom: 4px;
+      border-bottom: 3px solid #1c1c1c;
+      display: inline-block;
+    }
+
+    a { color: #1c1c1c; }
+
+    .add-form { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 26px; }
+    .add-form input {
+      flex: 1 1 200px;
+      padding: 10px 12px;
+      font: inherit;
+      background: #e6e2d9;
+      border: 2px solid #1c1c1c;
+      border-radius: 3px;
+    }
+
+    .btn {
+      padding: 12px 30px;
+      font-family: 'Permanent Marker', cursive;
+      font-size: 1.2rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #fff;
+      background: #151515;
+      border: none;
+      cursor: pointer;
+      clip-path: polygon(0 8%, 6% 0, 20% 6%, 40% 0, 60% 6%, 80% 0, 95% 6%, 100% 0,
+                         100% 92%, 94% 100%, 75% 94%, 55% 100%, 35% 94%, 15% 100%, 4% 94%, 0 100%);
+    }
+    .btn:hover { background: #3a3a3a; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      padding: 8px 10px;
+      text-align: left;
+      font-family: 'Permanent Marker', cursive;
+      font-weight: normal;
+      border-bottom: 3px solid #1c1c1c;
+    }
+    td { padding: 8px 10px; border-bottom: 2px dashed rgba(0,0,0,.35); }
+    tr:hover td { background: rgba(0,0,0,.06); }
+
+.btn { transition: transform .15s, background .15s; }
+.btn:hover { background: #000; transform: rotate(-1.5deg) scale(1.06); }
+.btn:active { transform: scale(.97); }
+
+.btn { transition: transform .15s, background .15s; }
+.btn:hover { background: #000; transform: scale(1.12); }
+.btn:active { transform: scale(.97); }
+
+.topbar a, td a {
+  display: inline-block;
+  transition: transform .15s;
+}
+.topbar a:hover, td a:hover {
+  transform: scale(1.2);
+  font-weight: 700;
+}
+
+.link-btn {
+  display: inline-block;
+  padding: 0;
+  font: inherit;
+  color: #8b1a1a;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.link-btn:hover { transform: scale(1.2); font-weight: 700; }
+
+    .empty { text-align: center; padding: 24px; }
+
+
+.heading-row {
+  display: flex !important;          
+  justify-content: space-between;   
+  align-items: flex-end;             
+  flex-wrap: nowrap;              
+  gap: 12px;
+}
+
+
+.heading-row .quote {
+  margin-left: auto;                
+  text-align: right;
+  max-width: 420px;
+  transform: rotate(-1deg);
+}
+
+.heading-row .quote::after { content: " ♫"; }
+.quote {
+  text-align: right;
+  max-width: 420px;
+  transform: rotate(-1deg);
+}
+
+.quote::after { content: " ♫"; }
+  
+  </style>
+</head>
+<body>
+   <?php include 'scrapbook2.php'; ?>
+
+  <div class="sheet">
+    <span class="tape"></span>
+    <div class="paper">
+
+      <div class="topbar">
+        <span>Logged in as <b><?= htmlspecialchars($_SESSION['full_name']) ?></b></span>
+        <a href="logout.php">Logout</a>
+      </div>
+      <div class="heading-row">
+        <div>
+          <h1>The Artist Wall</h1>
+          <p class="tagline">Who's on the wall today?</p>
+        </div>
+
+        <p class="tagline quote">♫"But you Just Cannot Get Angry in the Same Way"</p>
+      </div>
+      <form method="post" class="add-form">
+        <input type="hidden" name="csrf" value="<?= $_SESSION['csrf'] ?>">
+        <input name="artist_name" placeholder="Artist name" required>
+        <input name="genre" placeholder="Genre">
+        <button class="btn">Add Artist</button>
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>ID</th><th>Name</th><th>Genre</th><th>Added by</th>
+            <th>Last updated by</th><th>Last updated</th><th>Actions</th>
+          </tr>
+
+          <?php foreach ($artists as $a): ?>
+          <tr>
+            <td><?= (int)$a['artist_id'] ?></td>
+            <td><?= htmlspecialchars($a['artist_name']) ?></td>
+            <td><?= htmlspecialchars($a['genre'] ?? '') ?></td>
+            <td><?= htmlspecialchars($a['added_by_name'] ?? '—') ?></td>
+            <td><?= htmlspecialchars($a['updated_by_name'] ?? '—') ?></td>
+            <td><?= htmlspecialchars($a['last_updated'] ?? '') ?></td>
+          <td>
+  <a href="records_index.php?artist_id=<?= (int)$a['artist_id'] ?>">Records</a> |
+  <a href="music_artist_edit.php?id=<?= (int)$a['artist_id'] ?>">Edit</a> |
+  <form method="post" action="music_artist_delete.php" style="display:inline"
+        onsubmit="return confirm(<?= htmlspecialchars(json_encode('Delete ' . $a['artist_name'] . ' and all their records?'), ENT_QUOTES) ?>)">
+    <input type="hidden" name="csrf" value="<?= $_SESSION['csrf'] ?>">
+    <input type="hidden" name="id" value="<?= (int)$a['artist_id'] ?>">
+    <button type="submit" class="link-btn">Delete</button>
+  </form>
+</td>
+          </tr>
+          <?php endforeach; ?>
+
+          <?php if (!$artists): ?>
+            <tr><td colspan="7" class="empty">No artists yet. Add the first one above!</td></tr>
+          <?php endif; ?>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
