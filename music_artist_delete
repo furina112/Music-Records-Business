@@ -1,0 +1,25 @@
+<?php
+require 'authentication.php';      // login guard
+require 'music_dbconfig.php';
+
+// Only accept a real POST that carries the correct CSRF token
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
+
+    $id = (int)($_POST['id'] ?? 0);
+
+    if ($id > 0) {
+        try {
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM records WHERE artist_id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM artists WHERE artist_id = ?")->execute([$id]);
+            $pdo->commit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            die("Could not delete: " . htmlspecialchars($e->getMessage()));
+        }
+    }
+}
+
+header("Location: music_artist_index.php");
+exit;
