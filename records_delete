@@ -1,0 +1,3 @@
+<?php require 'music_dbconfig.php';
+$pdo->prepare("DELETE FROM records WHERE record_id=?")->execute([$_GET['id']]);
+header("Location: records_index.php?artist_id=" . $_GET['artist_id']);
