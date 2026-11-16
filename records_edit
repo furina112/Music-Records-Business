@@ -1,0 +1,190 @@
+<?php
+require 'authentication.php';
+require 'music_dbconfig.php';
+
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+
+$id = (int)($_GET['id'] ?? $_POST['record_id'] ?? 0);
+
+$stmt = $pdo->prepare("SELECT * FROM records WHERE record_id = ?");
+$stmt->execute([$id]);
+$record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$record) {
+    header("Location: music_artist_index.php");
+    exit;
+}
+
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
+        http_response_code(403);
+        exit('Invalid request.');
+    }
+
+    $artist_id = (int)($_POST['artist_id'] ?? 0);
+    $title     = trim($_POST['title'] ?? '');
+    $price     = (float)($_POST['price'] ?? 0);
+    $year      = (int)($_POST['release_year'] ?? 0);
+
+    if ($artist_id < 1 || $title === '') {
+        $error = 'Please pick an artist and enter a title.';
+    } else {
+        $pdo->prepare(
+            "UPDATE records
+             SET artist_id = ?, title = ?, price = ?, release_year = ?, updated_by = ?
+             WHERE record_id = ?"
+        )->execute([$artist_id, $title, $price, $year, $uid, $id]);
+
+        header("Location: records_index.php?artist_id=" . $artist_id);
+        exit;
+    }
+
+    // keep what the user typed if there was an error
+    $record['artist_id']    = $artist_id;
+    $record['title']        = $title;
+    $record['price']        = $price;
+    $record['release_year'] = $year;
+}
+
+$artists = $pdo->query("SELECT artist_id, artist_name FROM artists ORDER BY artist_name")
+               ->fetchAll(PDO::FETCH_ASSOC);
+?>
+<?php include 'scrapbook2.php'; ?>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Caveat', cursive;
+    font-size: 22px;
+    color: #1b1b1b;
+  }
+
+  .wrap {
+    position: relative;
+    max-width: 700px;
+    margin: 80px auto 50px;
+    transform: rotate(-1deg);
+    filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.75));
+  }
+
+  .paper {
+    position: relative;
+    padding: 56px 46px 44px;
+    background: linear-gradient(135deg, #d9d5cb, #c9c4b9);
+    clip-path: polygon(0.5% 1.5%, 4% 0%, 8% 1.5%, 13% 0%, 18% 1.5%, 24% 0%, 30% 1.5%, 36% 0%, 42% 1.5%, 48% 0%, 54% 1.5%, 60% 0%, 66% 1.5%, 72% 0%, 78% 1.5%, 84% 0%, 90% 1.5%, 95% 0%, 100% 1.5%,
+                       99.4% 12%, 100% 25%, 99.2% 38%, 100% 52%, 99.3% 66%, 100% 80%, 99.4% 92%, 100% 98.5%,
+                       95% 100%, 90% 98.5%, 84% 100%, 78% 98.5%, 72% 100%, 66% 98.5%, 60% 100%, 54% 98.5%, 48% 100%, 42% 98.5%, 36% 100%, 30% 98.5%, 24% 100%, 18% 98.5%, 13% 100%, 8% 98.5%, 4% 100%, 0% 98.5%,
+                       0.6% 90%, 0% 76%, 0.7% 62%, 0% 48%, 0.6% 34%, 0% 20%, 0.5% 8%);
+  }
+
+  .tape {
+    position: absolute;
+    top: -16px; left: 50%;
+    margin-left: -75px;
+    width: 150px; height: 36px;
+    z-index: 2;
+    background: rgba(222, 200, 160, 0.85);
+    transform: rotate(-3deg);
+  }
+
+  .topbar { display: flex; justify-content: space-between; margin: 0 0 4px; font-style: italic; font-size: 21px; position: relative; z-index: 5; }
+  .topbar a { color: #1b1b1b; font-weight: 700; }
+
+  h1 {
+    margin: 0 0 18px;
+    font-family: 'Permanent Marker', cursive;
+    font-weight: 400;
+    font-size: 44px;
+    line-height: 1.1;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transform: rotate(-1.5deg);
+    transform-origin: left center;
+  }
+
+  form { display: flex; flex-direction: column; gap: 14px; }
+  label { font-style: italic; font-size: 22px; }
+  input, select {
+    width: 100%;
+    padding: 12px 14px;
+    font-family: 'Caveat', cursive;
+    font-size: 23px;
+    font-style: italic;
+    color: #1b1b1b;
+    background: rgba(255, 255, 255, .3);
+    border: 2px solid #2a2a2a;
+    border-radius: 3px;
+    outline: none;
+  }
+  input:focus, select:focus { background: rgba(255, 255, 255, .6); border-color: #000; }
+
+  .actions { display: flex; align-items: center; gap: 20px; margin-top: 8px; }
+  button {
+    padding: 13px 28px 11px;
+    font-family: 'Permanent Marker', cursive;
+    font-size: 21px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #eee;
+    background: #111;
+    border: none;
+    cursor: pointer;
+    transition: transform .15s;
+  }
+  button:hover { transform: rotate(-1deg) scale(1.06); background: #000; }
+  .actions a { color: #1b1b1b; font-weight: 700; }
+  .error { color: #8b1a1a; font-weight: 700; margin: 0; }
+</style>
+
+<div class="wrap">
+  <span class="tape"></span>
+  <div class="paper">
+
+    <p class="topbar">
+      <span>Logged in as <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+      <a href="logout.php" onclick="return confirm('Are you sure you want to log out?')">Logout</a>
+    </p>
+
+    <h1>Edit Record #<?= (int)$record['record_id'] ?></h1>
+
+    <?php if ($error): ?>
+      <p class="error"><?= htmlspecialchars($error) ?></p>
+    <?php endif; ?>
+
+    <form method="post">
+      <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
+      <input type="hidden" name="record_id" value="<?= (int)$record['record_id'] ?>">
+
+      <label for="artist_id">Artist</label>
+      <select id="artist_id" name="artist_id" required>
+        <?php foreach ($artists as $a): ?>
+          <option value="<?= (int)$a['artist_id'] ?>"
+            <?= (int)$record['artist_id'] === (int)$a['artist_id'] ? 'selected' : '' ?>>
+            <?= htmlspecialchars($a['artist_name']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+
+      <label for="title">Title</label>
+      <input id="title" name="title" required value="<?= htmlspecialchars($record['title']) ?>">
+
+      <label for="price">Price</label>
+      <input id="price" name="price" type="number" step="0.01" required value="<?= htmlspecialchars($record['price']) ?>">
+
+      <label for="release_year">Year</label>
+      <input id="release_year" name="release_year" type="number" required value="<?= htmlspecialchars($record['release_year']) ?>">
+
+      <div class="actions">
+        <button type="submit">Save Changes</button>
+        <a href="records_index.php?artist_id=<?= (int)$record['artist_id'] ?>">&larr; Cancel</a>
+      </div>
+    </form>
+
+  </div>
+</div>
